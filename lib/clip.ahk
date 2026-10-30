@@ -91,3 +91,82 @@ SaveClipboardTextToFile(outPath) {
     }
     return false
 }
+
+SetClipboardFileDrop(filePath) {
+    if !FileExist(filePath)
+        return false
+
+    pathBytes := (StrLen(filePath) + 2) * 2
+    totalSize := 20 + pathBytes
+
+    hMem := DllCall("GlobalAlloc", "uint", 0x0042, "uptr", totalSize, "ptr")
+    if !hMem
+        return false
+
+    pMem := DllCall("GlobalLock", "ptr", hMem, "ptr")
+    if !pMem {
+        DllCall("GlobalFree", "ptr", hMem)
+        return false
+    }
+
+    NumPut("uint", 20, pMem, 0)
+    NumPut("int", 0, pMem, 4)
+    NumPut("int", 0, pMem, 8)
+    NumPut("int", 0, pMem, 12)
+    NumPut("int", 1, pMem, 16)
+
+    StrPut(filePath, pMem + 20, StrLen(filePath) + 1, "UTF-16")
+    NumPut("ushort", 0, pMem + 20 + (StrLen(filePath) * 2))
+
+    DllCall("GlobalUnlock", "ptr", hMem)
+
+    opened := false
+    Loop 5 {
+        if DllCall("OpenClipboard", "ptr", A_ScriptHwnd) {
+            opened := true
+            break
+        }
+        Sleep(30)
+    }
+    if !opened {
+        DllCall("GlobalFree", "ptr", hMem)
+        return false
+    }
+
+    DllCall("EmptyClipboard")
+    DllCall("SetClipboardData", "uint", 15, "ptr", hMem)
+    DllCall("CloseClipboard")
+    return true
+}
+
+GetOrSaveTempClipboardImage() {
+    global lastClipSeq, lastClipImagePath
+    seq := DllCall("GetClipboardSequenceNumber", "uint")
+    if (seq != 0 && seq = lastClipSeq && lastClipImagePath != "" && FileExist(lastClipImagePath))
+        return lastClipImagePath
+
+    tempPath := A_Temp "\snip-" FormatTime(, "MMdd-HHmmss") ".png"
+    if SaveClipboardImageToFile(tempPath) {
+        lastClipSeq := seq
+        lastClipImagePath := tempPath
+        return tempPath
+    }
+    return ""
+}
+
+CleanupTempFiles() {
+    cutoff := DateAdd(A_Now, -24, "Hours")
+    Loop Files, A_Temp "\snip-*.png" {
+        if (DateDiff(A_LoopFileTimeModified, cutoff, "Seconds") < 0)
+            try FileDelete(A_LoopFileFullPath)
+    }
+    Loop Files, A_Temp "\text-*.txt" {
+        if (DateDiff(A_LoopFileTimeModified, cutoff, "Seconds") < 0)
+            try FileDelete(A_LoopFileFullPath)
+    }
+}
+
+OnClipChange(dataType) {
+    if (dataType = 2)
+        SetTimer(() => HasClipboardImageOnly() ? GetOrSaveTempClipboardImage() : 0, -200)
+}
