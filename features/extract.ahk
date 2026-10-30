@@ -1,5 +1,43 @@
 global ARCHIVE_EXT := "zip|rar|7z|tar|gz|tgz|bz2|tbz|tbz2|xz|txz|zst|tzst|iso|cab|arj|lzh|lha|wim|001|z01|r00"
 
+ExtractSelectedArchive() {
+    selection := GetExplorerSelection()
+    if (selection.Length = 0) {
+        NotifyQoL("Nothing Selected", "Select an archive first.")
+        return
+    }
+
+    archives := []
+    for path in selection {
+        if IsExtractable(path)
+            archives.Push(path)
+    }
+
+    if (archives.Length = 0) {
+        NotifyQoL("No Archive Selected", "Selected files are not recognized archives.")
+        return
+    }
+
+    sevenPath := Find7ZipGui()
+    if (sevenPath == "") {
+        NotifyQoL("7-Zip Not Found", "Install 7-Zip or configure path in config.ini")
+        return
+    }
+
+    for path in archives {
+        SplitPath(path, &fileName, &dir, &ext, &nameNoExt)
+        if (dir == "")
+            dir := A_Desktop
+
+        stem := RegExReplace(nameNoExt, "i)\.tar$", "")
+        targetFolder := dir "\" stem
+
+        cmd := '"' sevenPath '" x -aou -o"' targetFolder '" -- "' path '"'
+        NotifyQoL("Extracting Archive", stem)
+        Run(cmd, dir)
+    }
+}
+
 IsExtractable(path) {
     global ARCHIVE_EXT
     if !FileExist(path) || DirExist(path)
