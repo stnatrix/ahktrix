@@ -4,7 +4,7 @@
 Persistent(true)
 
 global APP_NAME := "ahktrix"
-global APP_VERSION := "1.0.0-alpha.19"
+global APP_VERSION := "1.0.0-alpha.20"
 
 SetWorkingDir(A_ScriptDir)
 
